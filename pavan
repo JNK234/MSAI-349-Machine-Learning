@@ -1,0 +1,344 @@
+import numpy as np
+import pandas as pd
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, classification_report, adjusted_rand_score
+import random
+import math
+# returns Euclidean distance between vectors and b
+def euclidean(a,b):
+    return float(np.sqrt(np.sum((np.array(a) - np.array(b)) ** 2)))
+
+def euclideansk(a,b):
+    if len(a) != len(b):
+        raise ValueError("Vectors must be the same length")
+    return math.sqrt(sum((float(a[i]) - float(b[i])) ** 2 for i in range(len(a))))
+# returns Cosine Similarity between vectors and b
+def cosim(a,b):
+    a = np.array(a)
+    b = np.array(b)
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+def cosimsk(a,b):
+    if len(a) != len(b):
+        raise ValueError("Vectors must be the same length")
+    
+    dot_product = sum(float(a[i]) * float(b[i]) for i in range(len(a)))
+    magnitude_a = math.sqrt(sum(float(a[i]) ** 2 for i in range(len(a))))
+    magnitude_b = math.sqrt(sum(float(b[i]) ** 2 for i in range(len(b))))
+    
+    if magnitude_a == 0 or magnitude_b == 0:
+        return 0  # Return 0 if any vector has zero magnitude
+    
+    return dot_product / (magnitude_a * magnitude_b)
+
+def pearson_correlation(a,b):
+    a = np.array(a, dtype = float)
+    b = np.array(b, dtype = float)
+    dist = np.corrcoef(a,b)[0,1]
+    return(dist)
+
+def pearson_correlationsk(a,b):
+    if len(a) != len(b):
+        raise ValueError("Vectors must be the same length")
+    
+    n = len(a)
+    sum_a = sum(float(a[i]) for i in range(n))
+    sum_b = sum(float(b[i]) for i in range(n))
+    sum_a_sq = sum(float(a[i]) ** 2 for i in range(n))
+    sum_b_sq = sum(float(b[i]) ** 2 for i in range(n))
+    sum_ab = sum(float(a[i]) * float(b[i]) for i in range(n))
+    
+    numerator = sum_ab - (sum_a * sum_b / n)
+    denominator = math.sqrt((sum_a_sq - (sum_a * 2) / n) * (sum_b_sq - (sum_b * 2) / n))
+    
+    if denominator == 0:
+        return 0  # Return 0 if there's no variation
+    
+    return numerator / denominator
+
+def hamming(a,b):
+    a = np.array(a)
+    b = np.array(b)
+    return(np.sum(a!=b))
+
+def hammingsk(a,b):
+    if len(a) != len(b):
+        raise ValueError("Vectors must be the same length")
+    return sum(1 for i in range(len(a)) if a[i] != b[i])
+
+
+# returns a list of labels for the query dataset based upon labeled observations in the train dataset.
+# metric is a string specifying either "euclidean" or "cosim".  
+# All hyper-parameters should be hard-coded in the algorithm.
+def knn(train, query, metric):
+    labels = []
+    k = 5  # Hyperparameter: number of neighbors to consider
+    
+    for q in query:
+        distances = []
+        for t in train:
+            label = t[0]
+            attributes = np.array(t[1], dtype=float)  # Convert attributes to float
+            if metric == "euclidean":
+                dist = float(euclidean(attributes, q))
+            elif metric == "cosim":
+                dist = float(1 - cosim(attributes, q))
+            elif metric == "hamming":
+                dist = float(hamming(attributes, q))
+            elif metric == "pearson":
+                dist = float(pearson_correlation(attributes, q))
+            distances.append((dist, label))
+
+        # Sort distances and select the k nearest neighbors
+        distances.sort(key=lambda x: x[0])
+        nearest_labels = [distances[i][1] for i in range(k)]
+        
+        # Majority voting
+        label_count = {}
+        for label in nearest_labels:
+            if label in label_count:
+                label_count[label] += 1
+            else:
+                label_count[label] = 1
+        
+        # Get the label with the highest count
+        predicted_label = max(label_count, key=label_count.get)
+        labels.append(predicted_label)
+
+    return labels
+
+
+# Function to preprocess data (transform to binary)
+def preprocess_data_quantized(data, levels=4):
+    processed_data = []
+    for label, attributes in data:
+        float_attributes = [float(x) for x in attributes]
+        quantized_attributes = [int(x / (256 / levels)) for x in float_attributes]
+        processed_data.append([label, quantized_attributes])
+    return processed_data
+
+# returns a list of labels for the query dataset based upon observations in the train dataset. 
+# labels should be ignored in the training set
+# metric is a string specifying either "euclidean" or "cosim".  
+# All hyper-parameters should be hard-coded in the algorithm.
+
+def read_data(file_name):
+    
+    data_set = []
+    with open(file_name,'rt') as f:
+        for line in f:
+            line = line.replace('\n','')
+            tokens = line.split(',')
+            label = tokens[0]
+            attribs = []
+            for i in range(784):
+                attribs.append(tokens[i+1])
+            data_set.append([label,attribs])
+    return(data_set)
+        
+def show(file_name,mode):
+    
+    data_set = read_data(file_name)
+    for obs in range(len(data_set)):
+        for idx in range(784):
+            if mode == 'pixels':
+                if data_set[obs][1][idx] == '0':
+                    print(' ',end='')
+                else:
+                    print('*',end='')
+            else:
+                print('%4s ' % data_set[obs][1][idx],end='')
+            if (idx % 28) == 27:
+                print(' ')
+        print('LABEL: %s' % data_set[obs][0],end='')
+        print(' ')
+
+def evaluate_classifier(predictions, true_labels):
+    cm = confusion_matrix(true_labels, predictions)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    disp.plot()
+    plt.title("Confusion Matrix")
+    plt.show()
+    
+    # Calculate accuracy
+    accuracy = accuracy_score(true_labels, predictions)
+    print(f"Accuracy: {accuracy:.4f}")
+
+    # Print classification report
+    print("Classification Report:")
+    print(classification_report(true_labels, predictions))
+
+def kmeans(train, k, metric="euclidean", max_iters=100):
+    centroids = random.sample(train, k)
+    centroids = [np.array(c[1], dtype=float) for c in centroids]
+    
+    for _ in range(max_iters):
+        clusters = [[] for _ in range(k)]
+        for t in train:
+            if metric == "euclidean":
+                distances = [euclidean(t[1], centroid) for centroid in centroids]
+            elif metric == "cosim":
+                distances = [1 - cosim(t[1], centroid) for centroid in centroids]
+            elif metric == "hamming":
+                distances = [hamming(t[1], centroid) for centroid in centroids]
+            elif metric == "pearson":
+                distances = [1 - pearson_correlation(t[1], centroid) for centroid in centroids]
+            closest_centroid = np.argmin(distances)
+            clusters[closest_centroid].append(t)
+        
+        new_centroids = []
+        for cluster in clusters:
+            if cluster:
+                new_centroid = np.mean([np.array(c[1], dtype=float) for c in cluster], axis=0)
+                new_centroids.append(new_centroid)
+            else:
+                new_centroids.append(random.choice(train)[1])
+        
+        if np.allclose(centroids, new_centroids):
+            break
+        
+        centroids = new_centroids
+    
+    return centroids, clusters
+
+# Assign Cluster Labels Based on Majority Voting
+def assign_labels(clusters):
+    label_mapping = {}
+    for i, cluster in enumerate(clusters):
+        if cluster:
+            # Count the most common label in the cluster
+            labels = [t[0] for t in cluster]
+            most_common_label = max(set(labels), key=labels.count)
+            label_mapping[i] = most_common_label  # Use the index as the key
+    return label_mapping
+
+def predict_kmeans(test_data, centroids, label_mapping, metric="euclidean"):
+    predicted_labels = []
+    for t in test_data:
+        if metric == "euclidean":
+            distances = [euclidean(t[1], centroid) for centroid in centroids]
+        elif metric == "cosim":
+            distances = [1 - cosim(t[1], centroid) for centroid in centroids]
+        elif metric == "hamming":
+            distances = [hamming(t[1], centroid) for centroid in centroids]
+        elif metric == "pearson":
+            distances = [1 - pearson_correlation(t[1], centroid) for centroid in centroids]
+        closest_centroid = np.argmin(distances)
+        if closest_centroid in label_mapping:
+            predicted_label = label_mapping[closest_centroid]
+        else:
+            # Assign to the most common label or a default label
+            predicted_label = max(label_mapping.values(), key=list(label_mapping.values()).count)
+        predicted_labels.append(predicted_label)
+    return predicted_labels
+
+
+def main_kmeans():
+    train_data = preprocess_data_quantized(read_data('mnist_train.csv'), levels=4)
+    test_data = preprocess_data_quantized(read_data('mnist_valid.csv'), levels=4)
+    
+    k = 10  # Number of clusters for digits 0-9
+    train_labels = [x[0] for x in train_data]
+    test_labels = [x[0] for x in test_data]
+    
+    for metric in ["euclidean", "cosim", "hamming", "pearson"]:
+        print(f"Evaluating K-means with {metric.capitalize()} Distance:")
+        
+        # Train K-means and get centroids and clusters
+        centroids, clusters = kmeans(train_data, k, metric=metric)
+        
+        # Evaluate on training data and create label mapping
+        label_mapping = assign_labels(clusters)
+        
+        # Predict labels for the test dataset
+        predicted_labels = predict_kmeans(test_data, centroids, label_mapping, metric=metric)
+        
+        # Calculate ARI on the test set
+        ari_test = adjusted_rand_score(test_labels, predicted_labels)
+        print(f"Adjusted Rand Index on test data: {ari_test:.4f}\n")
+
+def main():
+    #show('mnist_valid.csv','pixels')
+    train_data = preprocess_data_quantized(read_data('mnist_train.csv'), levels=4)
+    test_data = preprocess_data_quantized(read_data ('mnist_valid.csv'), levels= 4)
+    
+    train_labels = [x[0] for x in train_data]
+    train_attributes = [x[1] for x in train_data]
+    
+    test_labels = [x[0] for x in test_data]
+    test_attributes = [x[1] for x in test_data]
+    
+    y_pred_euclidean = knn(list(zip(train_labels, train_attributes)), test_attributes, "euclidean")
+    y_pred_cosim = knn(list(zip(train_labels, train_attributes)), test_attributes, "cosim")
+    y_pred_hamming = knn(list(zip(train_labels, train_attributes)), test_attributes, "hamming")
+    y_pred_pearson = knn(list(zip(train_labels, train_attributes)), test_attributes, "pearson")
+    
+    print("Evaluating Euclidean Distance Classifier:")
+    evaluate_classifier(y_pred_euclidean, test_labels)
+    
+    print("Evaluating Cosine Similarity Classifier:")
+    evaluate_classifier(y_pred_cosim, test_labels)
+    
+    print("Evaluating Hamming Distance Classifier:")
+    evaluate_classifier(y_pred_hamming, test_labels)
+    
+    print("Evaluating Pearson Correlation Classifier:")
+    evaluate_classifier(y_pred_pearson, test_labels)
+
+
+
+if __name__ == "__main__":
+    #main()
+    main_kmeans()
+    '''a1 = np.array([1, 2, 3, 4, 5])
+    b1 = np.array([5, 4, 3, 2, 1])
+    c1 = np.array([1, 2, 3, 4, 5])
+    
+    # Testing Euclidean Distance
+    print("Testing Euclidean Distance:")
+    euclidean_dist_np = euclidean(a1, b1)
+    euclidean_dist_sklearn = euclideansk(a1, b1)
+    print(f"Numpy: {euclidean_dist_np}, Math: {euclidean_dist_sklearn}\n")
+    
+    # Testing Cosine Similarity
+    print("Testing Cosine Similarity:")
+    cosine_sim_np = cosim(a1, b1)
+    cosine_sim_sklearn = cosimsk(a1, b1)
+    print(f"Numpy: {cosine_sim_np}, Math: {cosine_sim_sklearn}\n")
+    
+    # Testing Pearson Correlation
+    print("Testing Pearson Correlation:")
+    pearson_corr_np = pearson_correlation(a1, b1)
+    pearson_corr_sklearn = pearson_correlationsk(a1, b1)
+    print(f"Numpy: {pearson_corr_np}, Math: {pearson_corr_sklearn}\n")
+    
+    # Testing Hamming Distance
+    print("Testing Hamming Distance:")
+    hamming_dist_np = hamming(a1, b1)
+    hamming_dist_sklearn = hammingsk(a1, b1)  # Using the same function for Hamming distance
+    print(f"Numpy: {hamming_dist_np}, Math: {hamming_dist_sklearn}\n")
+    
+    # Additional tests for validation
+    print("Additional Tests:")
+    
+    # Test identical vectors for Euclidean Distance
+    euclidean_identical_np = euclidean(a1, c1)
+    euclidean_identical_sklearn = euclideansk(a1, c1)
+    print(f"Euclidean Distance (identical vectors) - Numpy: {euclidean_identical_np}, Math: {euclidean_identical_sklearn}")
+
+    # Test identical vectors for Cosine Similarity
+    cosine_identical_np = cosim(a1, c1)
+    cosine_identical_sklearn = cosimsk(a1, c1)
+    print(f"Cos ine Similarity (identical vectors) - Numpy: {cosine_identical_np}, Math: {cosine_identical_sklearn}")
+
+    # Test identical vectors for Pearson Correlation
+    pearson_identical_np = pearson_correlation(a1, c1)
+    pearson_identical_sklearn = pearson_correlationsk(a1, c1)
+    print(f"Pearson Correlation (identical vectors) - Numpy: {pearson_identical_np}, Math: {pearson_identical_sklearn}")
+
+    # Test identical vectors for Hamming Distance
+    hamming_identical_np = hamming(a1, c1)
+    hamming_identical_sklearn = hammingsk(a1, c1)  # Using the same function for Hamming distance
+    print(f"Hamming Distance (identical vectors) - Numpy: {hamming_identical_np}, Math: {hamming_identical_sklearn}")'''
