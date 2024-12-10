@@ -1,0 +1,13 @@
+{
+    "score": 0,
+    "tests_passed": 6,
+    "notes": {
+        "test_q_learning_simple": "PASS:",
+        "test_q_learning_slots": "PASS:",
+        "test_q_learning_frozen_lake": "PASS:",
+        "test_q_learning_random_argmax": "PASS:",
+        "test_q_learning_deterministic": "PASS:",
+        "test_np_suggestions": "FAIL:",
+        "test_setup": "FAIL - REQUIRED (automatic zero)"
+    }
+}
